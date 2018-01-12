@@ -1,0 +1,102 @@
+---
+title: "assignment"
+author: "Laurent Dreveton-Amzalac"
+date: "12 janvier 2018"
+output: html_document
+---
+```{r, echo=FALSE, eval=FALSE, results=FALSE, message=FALSE}
+setwd(dir="C:\\Users\\laurent\\Google Drive\\repository_git\\Coursera-JHU-8-practical-machine-learning\\assignment")
+getwd()
+
+save.image("assignment_practicalMachineLearning.RData")
+load("assignment_practicalMachineLearning.RData")
+```
+## Data Cleaning
+
+To clean the data, all colomuns with NA will be removed.
+```{r, message=FALSE, warning=FALSE}
+# Remove everything in current working library
+rm(list = ls())
+# Read cleaned training and testing data 
+training <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"))
+# Change the numeric type to integer type to make sure 
+# the same data type in training data and testing data
+training$magnet_dumbbell_z <- as.integer(training$magnet_dumbbell_z)
+training$magnet_forearm_y <- as.integer(training$magnet_forearm_y)
+training$magnet_forearm_z <- as.integer(training$magnet_forearm_z)
+# Change the 
+levels(testing$new_window) <- levels(training$new_window)
+#Transform the columns 8 to end, excepted classe, to numeric values
+data <- training
+for(i in c(8:ncol(data)-1)){ 
+        data[,i] = as.numeric(as.character(data[,i]))
+}
+#Keep only completed columns (is.na==0)
+colToKeep <- colnames(data[colSums(is.na(data)) == 0])[-(1:7)]
+keptData <- data[colToKeep]
+#due to slow machine I need to cut down the size of the training set
+library(caret)
+xdata <- createDataPartition(y=training$classe, p=1/3, list=FALSE)
+training <- keptData[xdata,]
+```
+
+
+## Exploratory Data Analysis
+
+Cross Validation was performed to find the out of sample errors. 
+
+```{r, message=FALSE, warning=FALSE}
+library(randomForest)
+```
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(111)
+# Define cross-validation experiment
+fitControl = trainControl( method = "cv", number = 2)
+# Perform the cross validation
+cv <- train(classe ~ ., data = training, method = "rf", 
+  trControl = fitControl)
+cv$bestTune$mtry
+```
+
+## Exploratory Data Analysis
+```{r}
+cv
+```
+
+## Build random forest model with full training model
+Best Tune of number of variable randomly sampled is: `r cv$bestTune$mtry`
+```{r}
+RandomForest = randomForest(classe ~ ., data = training, 
+                            mtry = cv$bestTune$mtry)
+PredTrain = predict(RandomForest)
+table(PredTrain, training$classe)
+confusionMatrix(PredTrain, training$classe)$overall[1]
+```
+
+## Predict testing data
+```{r}
+PredForest = predict(RandomForest, newdata = testing)
+PredForest
+```
+
+## Write the Prediction to files
+```{r}
+# Function to write a vector to files
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_", i ,".txt")
+    write.table(x[i], file = filename, quote = FALSE,
+                row.names = FALSE, col.names = FALSE)
+  }
+}
+# Call the function
+pml_write_files(PredForest)
+
+```
+
+
+
+
